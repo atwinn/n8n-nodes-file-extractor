@@ -7,7 +7,6 @@ import {
 } from 'n8n-workflow';
 
 import * as mammoth from 'mammoth';
-import * as path from 'path';
 
 export class ExtractFromFile implements INodeType {
     description: INodeTypeDescription = {
@@ -63,23 +62,19 @@ export class ExtractFromFile implements INodeType {
         const items = this.getInputData();
         const results: INodeExecutionData[] = [];
 
-        // Dynamic import pdfjs — ESM module, phải dùng import() thay vì require()
-        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        // Dynamic import pdfjs — ESM, phải dùng import() không dùng require()
+        const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
 
-        // Disable worker — Node.js không cần worker thread
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
-        // Standard fonts path — tránh warning font missing
-        const standardFontDataUrl = path.join(
-            __dirname,
-            '../../../node_modules/pdfjs-dist/standard_fonts/'
-        );
+        // Fix workerSrc — import worker vào main thread thay vì spawn thread riêng
+        // Đây là cách duy nhất hoạt động trong Node.js/n8n VM context
+        const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker as any;
 
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i) as string;
             const binaryField = this.getNodeParameter('binaryField', i) as string;
 
-            // Check binary TRƯỚC
+            // Check binary TRƯỚC khi gọi helper
             const binary = items[i].binary?.[binaryField];
             if (!binary) {
                 throw new NodeOperationError(
@@ -97,11 +92,8 @@ export class ExtractFromFile implements INodeType {
                     const uint8Array = new Uint8Array(buffer);
                     const loadingTask = pdfjsLib.getDocument({
                         data: uint8Array,
-                        standardFontDataUrl,
                         disableFontFace: true,
-                        useWorkerFetch: false,
-                        isEvalSupported: false,
-                        useSystemFonts: false,
+                        useSystemFonts: true,
                     });
 
                     const pdf = await loadingTask.promise;
@@ -116,7 +108,6 @@ export class ExtractFromFile implements INodeType {
                         fullText += pageText + '\n';
                     }
 
-                    // Cleanup
                     await pdf.destroy();
 
                     results.push({

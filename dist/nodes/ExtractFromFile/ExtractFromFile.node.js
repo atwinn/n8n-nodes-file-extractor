@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExtractFromFile = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const mammoth = __importStar(require("mammoth"));
-const path = __importStar(require("path"));
 class ExtractFromFile {
     constructor() {
         this.description = {
@@ -92,16 +91,16 @@ class ExtractFromFile {
         var _a;
         const items = this.getInputData();
         const results = [];
-        // Dynamic import pdfjs — ESM module, phải dùng import() thay vì require()
-        const pdfjsLib = await Promise.resolve().then(() => __importStar(require('pdfjs-dist/legacy/build/pdf.mjs')));
-        // Disable worker — Node.js không cần worker thread
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-        // Standard fonts path — tránh warning font missing
-        const standardFontDataUrl = path.join(__dirname, '../../../node_modules/pdfjs-dist/standard_fonts/');
+        // Dynamic import pdfjs — ESM, phải dùng import() không dùng require()
+        const pdfjsLib = await Promise.resolve().then(() => __importStar(require('pdfjs-dist/build/pdf.mjs')));
+        // Fix workerSrc — import worker vào main thread thay vì spawn thread riêng
+        // Đây là cách duy nhất hoạt động trong Node.js/n8n VM context
+        const pdfjsWorker = await Promise.resolve().then(() => __importStar(require('pdfjs-dist/build/pdf.worker.mjs')));
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i);
             const binaryField = this.getNodeParameter('binaryField', i);
-            // Check binary TRƯỚC
+            // Check binary TRƯỚC khi gọi helper
             const binary = (_a = items[i].binary) === null || _a === void 0 ? void 0 : _a[binaryField];
             if (!binary) {
                 throw new n8n_workflow_1.NodeOperationError(this.getNode(), `No binary data found in field "${binaryField}"`, { itemIndex: i });
@@ -113,11 +112,8 @@ class ExtractFromFile {
                     const uint8Array = new Uint8Array(buffer);
                     const loadingTask = pdfjsLib.getDocument({
                         data: uint8Array,
-                        standardFontDataUrl,
                         disableFontFace: true,
-                        useWorkerFetch: false,
-                        isEvalSupported: false,
-                        useSystemFonts: false,
+                        useSystemFonts: true,
                     });
                     const pdf = await loadingTask.promise;
                     let fullText = '';
@@ -129,7 +125,6 @@ class ExtractFromFile {
                             .join(' ');
                         fullText += pageText + '\n';
                     }
-                    // Cleanup
                     await pdf.destroy();
                     results.push({
                         json: {
