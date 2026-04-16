@@ -10,7 +10,6 @@ Includes all original operations plus:
 |---|---|
 | Extract From PDF | Extracts text content and metadata from PDF files |
 | Extract From DOCX | Extracts plain text from Word documents (.docx) |
-| Extract From XLSX | Extracts sheet content from Excel files as CSV text |
 | Extract From CSV | Transform a CSV file into output items |
 | Extract From JSON | Transform a JSON file into output items |
 | Extract From XML | Transform a XML file into output items |
