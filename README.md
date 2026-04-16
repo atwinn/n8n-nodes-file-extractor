@@ -29,7 +29,7 @@ docker exec -it n8n sh -c "
   cd /home/node/.n8n &&
   mkdir -p custom &&
   cd custom &&
-  npm install github:YOUR_USERNAME/n8n-nodes-file-extractor
+  npm install github:atwinn/n8n-nodes-file-extractor
 "
 docker restart n8n
 ```
