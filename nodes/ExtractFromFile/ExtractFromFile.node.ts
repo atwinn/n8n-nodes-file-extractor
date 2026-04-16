@@ -18,8 +18,8 @@ export class ExtractFromFile implements INodeType {
         icon: 'fa:file-import',
         group: ['transform'],
         version: 1,
-        description: 'Extract text from PDF, DOCX, XLSX, CSV, JSON, and more',
-        defaults: { name: 'Extract from File' },
+        description: 'Extract text from PDF, DOCX, and HTML files',
+        defaults: { name: 'Extract from File (Extended)' },
         inputs: ['main'],
         outputs: ['main'],
         properties: [
@@ -29,67 +29,23 @@ export class ExtractFromFile implements INodeType {
                 type: 'options',
                 noDataExpression: true,
                 options: [
-                    // ── n8n gốc đã có ──────────────────────────
                     {
-                        name: 'Extract From CSV',
-                        value: 'csv',
-                        description: 'Transform a CSV file into output items',
-                        action: 'Extract from CSV file',
+                        name: 'Extract From PDF',
+                        value: 'pdf',
+                        description: 'Extracts text content and metadata from a PDF file',
+                        action: 'Extract from PDF file',
+                    },
+                    {
+                        name: 'Extract From DOCX',
+                        value: 'docx',
+                        description: 'Extracts plain text from a Word document (.docx)',
+                        action: 'Extract from DOCX file',
                     },
                     {
                         name: 'Extract From HTML',
                         value: 'html',
-                        description: 'Transform a HTML file into output items',
+                        description: 'Extracts plain text from an HTML file',
                         action: 'Extract from HTML file',
-                    },
-                    {
-                        name: 'Extract From ICS',
-                        value: 'ics',
-                        description: 'Transform a ICS file into output items',
-                        action: 'Extract from ICS file',
-                    },
-                    {
-                        name: 'Extract From JSON',
-                        value: 'json',
-                        description: 'Transform a JSON file into output items',
-                        action: 'Extract from JSON file',
-                    },
-                    {
-                        name: 'Extract From ODS',
-                        value: 'ods',
-                        description: 'Transform an ODS file into output items',
-                        action: 'Extract from ODS file',
-                    },
-                    {
-                        name: 'Extract From PDF',
-                        value: 'pdf',
-                        description: 'Extracts the content and metadata from a PDF file',
-                        action: 'Extract from PDF file',
-                    },
-                    {
-                        name: 'Extract From RTF',
-                        value: 'rtf',
-                        description: 'Transform a RTF file into output items',
-                        action: 'Extract from RTF file',
-                    },
-                    {
-                        name: 'Extract From Text File',
-                        value: 'text',
-                        description: 'Extracts the content of a text file',
-                        action: 'Extract from text file',
-                    },
-                    {
-                        name: 'Extract From XML',
-                        value: 'xml',
-                        description: 'Transform a XML file into output items',
-                        action: 'Extract from XML file',
-                    },
-                    // ── Thêm mới ───────────────────────────────
-                    {
-                        name: 'Extract From DOCX',
-                        value: 'docx',
-                        description: 'Extracts the text content from a Word document (.docx)',
-                        action: 'Extract from DOCX file',
                     },
                 ],
                 default: 'pdf',
@@ -113,13 +69,8 @@ export class ExtractFromFile implements INodeType {
             const operation = this.getNodeParameter('operation', i) as string;
             const binaryField = this.getNodeParameter('binaryField', i) as string;
 
-            // ✅ Dùng helper của n8n thay vì binary.data
-            const binaryData = this.helpers.getBinaryDataBuffer
-                ? await this.helpers.getBinaryDataBuffer(i, binaryField)
-                : Buffer.from((items[i].binary?.[binaryField] as any).data, 'base64');
-
+            // Check binary TRƯỚC khi gọi helper
             const binary = items[i].binary?.[binaryField];
-
             if (!binary) {
                 throw new NodeOperationError(
                     this.getNode(),
@@ -128,20 +79,12 @@ export class ExtractFromFile implements INodeType {
                 );
             }
 
-            try {
-                if (operation === 'docx') {
-                    const result = await mammoth.extractRawText({ buffer: binaryData });
-                    results.push({
-                        json: {
-                            text: result.value,
-                            fileName: binary.fileName || binaryField,
-                            mimeType: binary.mimeType,
-                        },
-                        binary: items[i].binary,
-                    });
+            // Lấy buffer qua n8n helper — đúng với mọi storage mode
+            const buffer = await this.helpers.getBinaryDataBuffer(i, binaryField);
 
-                } else if (operation === 'pdf') {
-                    const pdf = await pdfParse(binaryData);
+            try {
+                if (operation === 'pdf') {
+                    const pdf = await pdfParse(buffer);
                     results.push({
                         json: {
                             text: pdf.text,
@@ -153,10 +96,34 @@ export class ExtractFromFile implements INodeType {
                         binary: items[i].binary,
                     });
 
-                } else {
+                } else if (operation === 'docx') {
+                    const result = await mammoth.extractRawText({ buffer });
                     results.push({
                         json: {
-                            text: binaryData.toString('utf8'),
+                            text: result.value,
+                            fileName: binary.fileName || binaryField,
+                            mimeType: binary.mimeType,
+                        },
+                        binary: items[i].binary,
+                    });
+
+                } else if (operation === 'html') {
+                    // Strip HTML tags, decode entities, trả về plain text
+                    const raw = buffer.toString('utf8');
+                    const text = raw
+                        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&quot;/g, '"')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim();
+                    results.push({
+                        json: {
+                            text,
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },

@@ -1,71 +1,78 @@
 # n8n-nodes-file-extractor
 
-An extended version of n8n's built-in **Extract from File** node — adds native support for **DOCX** and **XLSX** file types that the original node does not handle.
+Extended **Extract from File** node for n8n — adds native **DOCX** support and a lightweight **HTML** text stripper alongside the built-in PDF extraction.
 
-## Features
+## Supported operations
 
-Includes all original operations plus:
-
-| Operation | Description |
-|---|---|
-| Extract From PDF | Extracts text content and metadata from PDF files |
-| Extract From DOCX | Extracts plain text from Word documents (.docx) |
-| Extract From CSV | Transform a CSV file into output items |
-| Extract From JSON | Transform a JSON file into output items |
-| Extract From XML | Transform a XML file into output items |
-| Extract From HTML | Transform a HTML file into output items |
-| Extract From RTF | Transform a RTF file into output items |
-| Extract From ODS | Transform an ODS file into output items |
-| Extract From ICS | Transform an ICS file into output items |
-| Extract From Text File | Extracts the content of a plain text file |
+| Operation | Output fields | Notes |
+|---|---|---|
+| Extract From PDF | `text`, `numpages`, `info`, `fileName`, `mimeType` | Uses `pdf-parse` |
+| Extract From DOCX | `text`, `fileName`, `mimeType` | Uses `mammoth` |
+| Extract From HTML | `text`, `fileName`, `mimeType` | Strips tags and decodes entities |
 
 ## Installation
 
-### Docker (recommended)
+### Docker — Linux / macOS (SSH server)
 
 ```bash
-docker exec -it n8n sh -c "
-  cd /home/node/.n8n &&
-  mkdir -p custom &&
-  cd custom &&
-  npm install github:atwinn/n8n-nodes-file-extractor
-"
+docker exec n8n npm install \
+  --prefix /home/node/.n8n/custom \
+  github:atwinn/n8n-nodes-file-extractor
+
 docker restart n8n
 ```
 
-### Update to latest version
+### Docker — Windows (PowerShell + Docker Desktop)
 
-```bash
-docker exec -it n8n sh -c "
-  cd /home/node/.n8n/custom &&
-  npm update n8n-nodes-file-extractor
-"
+```powershell
+docker exec n8n npm install --prefix /home/node/.n8n/custom github:atwinn/n8n-nodes-file-extractor
+
 docker restart n8n
 ```
 
-### npm / n8n Desktop
+## Update to latest version
+
+### Linux / macOS
 
 ```bash
-npm install -g n8n-nodes-file-extractor
+docker exec n8n npm install \
+  --prefix /home/node/.n8n/custom \
+  github:atwinn/n8n-nodes-file-extractor
+
+docker restart n8n
+```
+
+### Windows (PowerShell)
+
+```powershell
+docker exec n8n npm install --prefix /home/node/.n8n/custom github:atwinn/n8n-nodes-file-extractor
+
+docker restart n8n
 ```
 
 ## Usage
 
-After installation, search for **"Extract from File"** in the n8n node panel.
-The node works identically to the built-in version — select your operation and set the **Input Binary Field** to match your binary data field name (default: `data`).
+After installation, search for **"Extract from File (Extended)"** in the n8n node panel.
 
-### DOCX example
+Set **Input Binary Field** to match your binary field name (default: `data`).
+
+### DOCX
 
 Input Binary Field: data
 Operation:          Extract From DOCX
-Output:             $json.text  →  plain text content of the Word document
+Output:             $json.text
 
-### XLSX example
+### PDF
 
 Input Binary Field: data
-Operation:          Extract From XLSX
-Output:             $json.text   →  CSV-formatted sheet content
-$json.sheets →  array of sheet names
+Operation:          Extract From PDF
+Output:             $json.text, $json.numpages, $json.info
+
+### HTML
+
+Input Binary Field: data
+Operation:          Extract From HTML
+Output:             $json.text  (tags stripped, entities decoded)
 
 ## Dependencies
 
@@ -73,13 +80,12 @@ $json.sheets →  array of sheet names
 |---|---|---|
 | mammoth | 1.12.0 | DOCX text extraction |
 | pdf-parse | 2.4.5 | PDF text extraction |
-| xlsx | 0.18.5 | Excel file parsing |
 
 ## Compatibility
 
-- n8n version: 1.0.0+
+- n8n: 1.0.0+
 - Node.js: 18+
-- Docker: works with standard `n8nio/n8n` image
+- Docker image: `n8nio/n8n` (Alpine Linux)
 
 ## License
 
