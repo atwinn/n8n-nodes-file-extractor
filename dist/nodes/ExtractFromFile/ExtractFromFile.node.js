@@ -32,11 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExtractFromFile = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const mammoth = __importStar(require("mammoth"));
-const pdfParse = require('pdf-parse');
+const _pdfModule = require('pdf-parse');
+const pdfParse = typeof _pdfModule === 'function'
+    ? _pdfModule
+    : ((_a = _pdfModule.default) !== null && _a !== void 0 ? _a : _pdfModule);
 class ExtractFromFile {
     constructor() {
         this.description = {

@@ -7,9 +7,11 @@ import {
 } from 'n8n-workflow';
 
 import * as mammoth from 'mammoth';
-const pdfParse = require('pdf-parse') as (
-    buffer: Buffer
-) => Promise<{ text: string; numpages: number; info: any }>;
+const _pdfModule = require('pdf-parse');
+const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number; info: any }> =
+    typeof _pdfModule === 'function'
+        ? _pdfModule
+        : (_pdfModule.default ?? _pdfModule);
 
 export class ExtractFromFile implements INodeType {
     description: INodeTypeDescription = {
