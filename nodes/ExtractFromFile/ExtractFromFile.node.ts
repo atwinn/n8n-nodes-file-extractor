@@ -7,7 +7,6 @@ import {
 } from 'n8n-workflow';
 
 import * as mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
 const pdfParse = require('pdf-parse') as (
     buffer: Buffer
 ) => Promise<{ text: string; numpages: number; info: any }>;
@@ -92,12 +91,6 @@ export class ExtractFromFile implements INodeType {
                         description: 'Extracts the text content from a Word document (.docx)',
                         action: 'Extract from DOCX file',
                     },
-                    {
-                        name: 'Extract From XLSX',
-                        value: 'xlsx',
-                        description: 'Extracts sheet content from an Excel file (.xlsx) as CSV text',
-                        action: 'Extract from XLSX file',
-                    },
                 ],
                 default: 'pdf',
             },
@@ -108,17 +101,6 @@ export class ExtractFromFile implements INodeType {
                 default: 'data',
                 required: true,
                 description: 'Name of the binary field containing the file to extract',
-            },
-            // Option: XLSX join sheets
-            {
-                displayName: 'Join Sheets With',
-                name: 'sheetSeparator',
-                type: 'string',
-                default: '\n\n',
-                displayOptions: {
-                    show: { operation: ['xlsx', 'ods'] },
-                },
-                description: 'String used to separate multiple sheets in the output text',
             },
         ],
     };
@@ -149,27 +131,6 @@ export class ExtractFromFile implements INodeType {
                     results.push({
                         json: {
                             text: result.value,
-                            fileName: binary.fileName || binaryField,
-                            mimeType: binary.mimeType,
-                        },
-                        binary: items[i].binary,
-                    });
-
-                    // ── XLSX (mới) ─────────────────────────────
-                } else if (operation === 'xlsx') {
-                    const separator = this.getNodeParameter('sheetSeparator', i) as string;
-                    const workbook = XLSX.read(buffer, { type: 'buffer' });
-                    const parts: string[] = [];
-
-                    workbook.SheetNames.forEach(sheetName => {
-                        const sheet = workbook.Sheets[sheetName];
-                        parts.push(`=== Sheet: ${sheetName} ===\n${XLSX.utils.sheet_to_csv(sheet)}`);
-                    });
-
-                    results.push({
-                        json: {
-                            text: parts.join(separator),
-                            sheets: workbook.SheetNames,
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },
