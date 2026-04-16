@@ -8,6 +8,25 @@ import {
 
 import * as mammoth from 'mammoth';
 
+// Patch module.parent trước khi require pdf-parse
+// Tránh lỗi "not a function" trong n8n VM isolation
+const Module = require('module');
+const originalLoad = Module._load;
+Module._load = function (request: string, parent: any, isMain: boolean) {
+    if (request === 'pdf-parse' || request.includes('pdf-parse')) {
+        isMain = false;
+    }
+    return originalLoad.call(this, request, parent, isMain);
+};
+
+const pdfParse = require('pdf-parse') as (
+    buffer: Buffer,
+    options?: object
+) => Promise<{ text: string; numpages: number; info: any }>;
+
+// Restore original loader
+Module._load = originalLoad;
+
 export class ExtractFromFile implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Extract from File (Extended)',
@@ -62,19 +81,10 @@ export class ExtractFromFile implements INodeType {
         const items = this.getInputData();
         const results: INodeExecutionData[] = [];
 
-        // Dynamic import pdfjs — ESM, phải dùng import() không dùng require()
-        const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
-
-        // Fix workerSrc — import worker vào main thread thay vì spawn thread riêng
-        // Đây là cách duy nhất hoạt động trong Node.js/n8n VM context
-        const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker as any;
-
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i) as string;
             const binaryField = this.getNodeParameter('binaryField', i) as string;
 
-            // Check binary TRƯỚC khi gọi helper
             const binary = items[i].binary?.[binaryField];
             if (!binary) {
                 throw new NodeOperationError(
@@ -84,36 +94,16 @@ export class ExtractFromFile implements INodeType {
                 );
             }
 
-            // Lấy buffer qua n8n helper
             const buffer = await this.helpers.getBinaryDataBuffer(i, binaryField);
 
             try {
                 if (operation === 'pdf') {
-                    const uint8Array = new Uint8Array(buffer);
-                    const loadingTask = pdfjsLib.getDocument({
-                        data: uint8Array,
-                        disableFontFace: true,
-                        useSystemFonts: true,
-                    });
-
-                    const pdf = await loadingTask.promise;
-                    let fullText = '';
-
-                    for (let p = 1; p <= pdf.numPages; p++) {
-                        const page = await pdf.getPage(p);
-                        const content = await page.getTextContent();
-                        const pageText = content.items
-                            .map((item: any) => item.str)
-                            .join(' ');
-                        fullText += pageText + '\n';
-                    }
-
-                    await pdf.destroy();
-
+                    const pdf = await pdfParse(buffer);
                     results.push({
                         json: {
-                            text: fullText.trim(),
-                            numpages: pdf.numPages,
+                            text: pdf.text,
+                            numpages: pdf.numpages,
+                            info: pdf.info,
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },
