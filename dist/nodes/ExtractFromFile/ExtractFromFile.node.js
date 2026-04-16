@@ -36,19 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExtractFromFile = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const mammoth = __importStar(require("mammoth"));
-// Patch module.parent trước khi require pdf-parse
-// Tránh lỗi "not a function" trong n8n VM isolation
-const Module = require('module');
-const originalLoad = Module._load;
-Module._load = function (request, parent, isMain) {
-    if (request === 'pdf-parse' || request.includes('pdf-parse')) {
-        isMain = false;
-    }
-    return originalLoad.call(this, request, parent, isMain);
-};
-const pdfParse = require('pdf-parse');
-// Restore original loader
-Module._load = originalLoad;
 class ExtractFromFile {
     constructor() {
         this.description = {
@@ -57,7 +44,7 @@ class ExtractFromFile {
             icon: 'fa:file-import',
             group: ['transform'],
             version: 1,
-            description: 'Extract text from PDF, DOCX, and HTML files',
+            description: 'Extract text from DOCX and HTML files',
             defaults: { name: 'Extract from File (Extended)' },
             inputs: ['main'],
             outputs: ['main'],
@@ -68,12 +55,6 @@ class ExtractFromFile {
                     type: 'options',
                     noDataExpression: true,
                     options: [
-                        {
-                            name: 'Extract From PDF',
-                            value: 'pdf',
-                            description: 'Extracts text content and metadata from a PDF file',
-                            action: 'Extract from PDF file',
-                        },
                         {
                             name: 'Extract From DOCX',
                             value: 'docx',
@@ -87,7 +68,7 @@ class ExtractFromFile {
                             action: 'Extract from HTML file',
                         },
                     ],
-                    default: 'pdf',
+                    default: 'docx',
                 },
                 {
                     displayName: 'Input Binary Field',
@@ -113,20 +94,7 @@ class ExtractFromFile {
             }
             const buffer = await this.helpers.getBinaryDataBuffer(i, binaryField);
             try {
-                if (operation === 'pdf') {
-                    const pdf = await pdfParse(buffer);
-                    results.push({
-                        json: {
-                            text: pdf.text,
-                            numpages: pdf.numpages,
-                            info: pdf.info,
-                            fileName: binary.fileName || binaryField,
-                            mimeType: binary.mimeType,
-                        },
-                        binary: items[i].binary,
-                    });
-                }
-                else if (operation === 'docx') {
+                if (operation === 'docx') {
                     const result = await mammoth.extractRawText({ buffer });
                     results.push({
                         json: {

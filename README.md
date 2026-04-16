@@ -1,12 +1,11 @@
 # n8n-nodes-file-extractor
 
-Extended **Extract from File** node for n8n — adds native **DOCX** support and a lightweight **HTML** text stripper alongside the built-in PDF extraction.
+Extended **Extract from File** node for n8n — adds native **DOCX** support and a lightweight **HTML** text stripper.
 
 ## Supported operations
 
 | Operation | Output fields | Notes |
 |---|---|---|
-| Extract From PDF | `text`, `numpages`, `info`, `fileName`, `mimeType` | Uses `pdf-parse` |
 | Extract From DOCX | `text`, `fileName`, `mimeType` | Uses `mammoth` |
 | Extract From HTML | `text`, `fileName`, `mimeType` | Strips tags and decodes entities |
 
@@ -62,12 +61,6 @@ Input Binary Field: data
 Operation:          Extract From DOCX
 Output:             $json.text
 
-### PDF
-
-Input Binary Field: data
-Operation:          Extract From PDF
-Output:             $json.text, $json.numpages, $json.info
-
 ### HTML
 
 Input Binary Field: data
@@ -79,7 +72,6 @@ Output:             $json.text  (tags stripped, entities decoded)
 | Package | Version | Purpose |
 |---|---|---|
 | mammoth | 1.12.0 | DOCX text extraction |
-| pdf-parse | 2.4.5 | PDF text extraction |
 
 ## Compatibility
 

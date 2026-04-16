@@ -8,25 +8,6 @@ import {
 
 import * as mammoth from 'mammoth';
 
-// Patch module.parent trước khi require pdf-parse
-// Tránh lỗi "not a function" trong n8n VM isolation
-const Module = require('module');
-const originalLoad = Module._load;
-Module._load = function (request: string, parent: any, isMain: boolean) {
-    if (request === 'pdf-parse' || request.includes('pdf-parse')) {
-        isMain = false;
-    }
-    return originalLoad.call(this, request, parent, isMain);
-};
-
-const pdfParse = require('pdf-parse') as (
-    buffer: Buffer,
-    options?: object
-) => Promise<{ text: string; numpages: number; info: any }>;
-
-// Restore original loader
-Module._load = originalLoad;
-
 export class ExtractFromFile implements INodeType {
     description: INodeTypeDescription = {
         displayName: 'Extract from File (Extended)',
@@ -34,7 +15,7 @@ export class ExtractFromFile implements INodeType {
         icon: 'fa:file-import',
         group: ['transform'],
         version: 1,
-        description: 'Extract text from PDF, DOCX, and HTML files',
+        description: 'Extract text from DOCX and HTML files',
         defaults: { name: 'Extract from File (Extended)' },
         inputs: ['main'],
         outputs: ['main'],
@@ -45,12 +26,6 @@ export class ExtractFromFile implements INodeType {
                 type: 'options',
                 noDataExpression: true,
                 options: [
-                    {
-                        name: 'Extract From PDF',
-                        value: 'pdf',
-                        description: 'Extracts text content and metadata from a PDF file',
-                        action: 'Extract from PDF file',
-                    },
                     {
                         name: 'Extract From DOCX',
                         value: 'docx',
@@ -64,7 +39,7 @@ export class ExtractFromFile implements INodeType {
                         action: 'Extract from HTML file',
                     },
                 ],
-                default: 'pdf',
+                default: 'docx',
             },
             {
                 displayName: 'Input Binary Field',
@@ -97,20 +72,7 @@ export class ExtractFromFile implements INodeType {
             const buffer = await this.helpers.getBinaryDataBuffer(i, binaryField);
 
             try {
-                if (operation === 'pdf') {
-                    const pdf = await pdfParse(buffer);
-                    results.push({
-                        json: {
-                            text: pdf.text,
-                            numpages: pdf.numpages,
-                            info: pdf.info,
-                            fileName: binary.fileName || binaryField,
-                            mimeType: binary.mimeType,
-                        },
-                        binary: items[i].binary,
-                    });
-
-                } else if (operation === 'docx') {
+                if (operation === 'docx') {
                     const result = await mammoth.extractRawText({ buffer });
                     results.push({
                         json: {
