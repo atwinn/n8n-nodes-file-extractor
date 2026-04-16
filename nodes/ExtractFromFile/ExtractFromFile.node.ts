@@ -7,11 +7,7 @@ import {
 } from 'n8n-workflow';
 
 import * as mammoth from 'mammoth';
-const _pdfModule = require('pdf-parse');
-const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number; info: any }> =
-    typeof _pdfModule === 'function'
-        ? _pdfModule
-        : (_pdfModule.default ?? _pdfModule);
+import * as path from 'path';
 
 export class ExtractFromFile implements INodeType {
     description: INodeTypeDescription = {
@@ -67,11 +63,23 @@ export class ExtractFromFile implements INodeType {
         const items = this.getInputData();
         const results: INodeExecutionData[] = [];
 
+        // Dynamic import pdfjs — ESM module, phải dùng import() thay vì require()
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+        // Disable worker — Node.js không cần worker thread
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+        // Standard fonts path — tránh warning font missing
+        const standardFontDataUrl = path.join(
+            __dirname,
+            '../../../node_modules/pdfjs-dist/standard_fonts/'
+        );
+
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i) as string;
             const binaryField = this.getNodeParameter('binaryField', i) as string;
 
-            // Check binary TRƯỚC khi gọi helper
+            // Check binary TRƯỚC
             const binary = items[i].binary?.[binaryField];
             if (!binary) {
                 throw new NodeOperationError(
@@ -81,17 +89,40 @@ export class ExtractFromFile implements INodeType {
                 );
             }
 
-            // Lấy buffer qua n8n helper — đúng với mọi storage mode
+            // Lấy buffer qua n8n helper
             const buffer = await this.helpers.getBinaryDataBuffer(i, binaryField);
 
             try {
                 if (operation === 'pdf') {
-                    const pdf = await pdfParse(buffer);
+                    const uint8Array = new Uint8Array(buffer);
+                    const loadingTask = pdfjsLib.getDocument({
+                        data: uint8Array,
+                        standardFontDataUrl,
+                        disableFontFace: true,
+                        useWorkerFetch: false,
+                        isEvalSupported: false,
+                        useSystemFonts: false,
+                    });
+
+                    const pdf = await loadingTask.promise;
+                    let fullText = '';
+
+                    for (let p = 1; p <= pdf.numPages; p++) {
+                        const page = await pdf.getPage(p);
+                        const content = await page.getTextContent();
+                        const pageText = content.items
+                            .map((item: any) => item.str)
+                            .join(' ');
+                        fullText += pageText + '\n';
+                    }
+
+                    // Cleanup
+                    await pdf.destroy();
+
                     results.push({
                         json: {
-                            text: pdf.text,
-                            numpages: pdf.numpages,
-                            info: pdf.info,
+                            text: fullText.trim(),
+                            numpages: pdf.numPages,
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },
@@ -110,7 +141,6 @@ export class ExtractFromFile implements INodeType {
                     });
 
                 } else if (operation === 'html') {
-                    // Strip HTML tags, decode entities, trả về plain text
                     const raw = buffer.toString('utf8');
                     const text = raw
                         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
