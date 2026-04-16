@@ -1,0 +1,30 @@
+{
+  "name": "n8n-nodes-file-extractor",
+  "version": "1.0.0",
+  "description": "Extended Extract from File node — adds DOCX and XLSX support",
+  "keywords": [
+    "n8n-community-node-package"
+  ],
+  "license": "MIT",
+  "author": "Duc Luong",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --project tsconfig.json --watch"
+  },
+  "n8n": {
+    "nodes": [
+      "dist/nodes/ExtractFromFile/ExtractFromFile.node.js"
+    ]
+  },
+  "dependencies": {
+    "mammoth": "1.12.0",
+    "pdf-parse": "2.4.5",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "n8n-workflow": "*",
+    "typescript": "^5.0.0"
+  }
+}
