@@ -112,6 +112,12 @@ export class ExtractFromFile implements INodeType {
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i) as string;
             const binaryField = this.getNodeParameter('binaryField', i) as string;
+
+            // ✅ Dùng helper của n8n thay vì binary.data
+            const binaryData = this.helpers.getBinaryDataBuffer
+                ? await this.helpers.getBinaryDataBuffer(i, binaryField)
+                : Buffer.from((items[i].binary?.[binaryField] as any).data, 'base64');
+
             const binary = items[i].binary?.[binaryField];
 
             if (!binary) {
@@ -122,12 +128,9 @@ export class ExtractFromFile implements INodeType {
                 );
             }
 
-            const buffer = Buffer.from(binary.data, 'base64');
-
             try {
-                // ── DOCX (mới) ─────────────────────────────
                 if (operation === 'docx') {
-                    const result = await mammoth.extractRawText({ buffer });
+                    const result = await mammoth.extractRawText({ buffer: binaryData });
                     results.push({
                         json: {
                             text: result.value,
@@ -137,9 +140,8 @@ export class ExtractFromFile implements INodeType {
                         binary: items[i].binary,
                     });
 
-                    // ── PDF (override n8n gốc, dùng pdf-parse) ─
                 } else if (operation === 'pdf') {
-                    const pdf = await pdfParse(buffer);
+                    const pdf = await pdfParse(binaryData);
                     results.push({
                         json: {
                             text: pdf.text,
@@ -151,12 +153,10 @@ export class ExtractFromFile implements INodeType {
                         binary: items[i].binary,
                     });
 
-                    // ── Các operation khác: pass-through ───────
                 } else {
-                    // Fallback: trả về text utf8 như Extract From Text File
                     results.push({
                         json: {
-                            text: buffer.toString('utf8'),
+                            text: binaryData.toString('utf8'),
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },

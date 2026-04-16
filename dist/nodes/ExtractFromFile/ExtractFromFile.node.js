@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExtractFromFile = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const mammoth = __importStar(require("mammoth"));
-const XLSX = __importStar(require("xlsx"));
 const pdfParse = require('pdf-parse');
 class ExtractFromFile {
     constructor() {
@@ -119,12 +118,6 @@ class ExtractFromFile {
                             description: 'Extracts the text content from a Word document (.docx)',
                             action: 'Extract from DOCX file',
                         },
-                        {
-                            name: 'Extract From XLSX',
-                            value: 'xlsx',
-                            description: 'Extracts sheet content from an Excel file (.xlsx) as CSV text',
-                            action: 'Extract from XLSX file',
-                        },
                     ],
                     default: 'pdf',
                 },
@@ -136,36 +129,27 @@ class ExtractFromFile {
                     required: true,
                     description: 'Name of the binary field containing the file to extract',
                 },
-                // Option: XLSX join sheets
-                {
-                    displayName: 'Join Sheets With',
-                    name: 'sheetSeparator',
-                    type: 'string',
-                    default: '\n\n',
-                    displayOptions: {
-                        show: { operation: ['xlsx', 'ods'] },
-                    },
-                    description: 'String used to separate multiple sheets in the output text',
-                },
             ],
         };
     }
     async execute() {
-        var _a;
+        var _a, _b;
         const items = this.getInputData();
         const results = [];
         for (let i = 0; i < items.length; i++) {
             const operation = this.getNodeParameter('operation', i);
             const binaryField = this.getNodeParameter('binaryField', i);
-            const binary = (_a = items[i].binary) === null || _a === void 0 ? void 0 : _a[binaryField];
+            // ✅ Dùng helper của n8n thay vì binary.data
+            const binaryData = this.helpers.getBinaryDataBuffer
+                ? await this.helpers.getBinaryDataBuffer(i, binaryField)
+                : Buffer.from(((_a = items[i].binary) === null || _a === void 0 ? void 0 : _a[binaryField]).data, 'base64');
+            const binary = (_b = items[i].binary) === null || _b === void 0 ? void 0 : _b[binaryField];
             if (!binary) {
                 throw new n8n_workflow_1.NodeOperationError(this.getNode(), `No binary data found in field "${binaryField}"`, { itemIndex: i });
             }
-            const buffer = Buffer.from(binary.data, 'base64');
             try {
-                // ── DOCX (mới) ─────────────────────────────
                 if (operation === 'docx') {
-                    const result = await mammoth.extractRawText({ buffer });
+                    const result = await mammoth.extractRawText({ buffer: binaryData });
                     results.push({
                         json: {
                             text: result.value,
@@ -174,29 +158,9 @@ class ExtractFromFile {
                         },
                         binary: items[i].binary,
                     });
-                    // ── XLSX (mới) ─────────────────────────────
-                }
-                else if (operation === 'xlsx') {
-                    const separator = this.getNodeParameter('sheetSeparator', i);
-                    const workbook = XLSX.read(buffer, { type: 'buffer' });
-                    const parts = [];
-                    workbook.SheetNames.forEach(sheetName => {
-                        const sheet = workbook.Sheets[sheetName];
-                        parts.push(`=== Sheet: ${sheetName} ===\n${XLSX.utils.sheet_to_csv(sheet)}`);
-                    });
-                    results.push({
-                        json: {
-                            text: parts.join(separator),
-                            sheets: workbook.SheetNames,
-                            fileName: binary.fileName || binaryField,
-                            mimeType: binary.mimeType,
-                        },
-                        binary: items[i].binary,
-                    });
-                    // ── PDF (override n8n gốc, dùng pdf-parse) ─
                 }
                 else if (operation === 'pdf') {
-                    const pdf = await pdfParse(buffer);
+                    const pdf = await pdfParse(binaryData);
                     results.push({
                         json: {
                             text: pdf.text,
@@ -207,13 +171,11 @@ class ExtractFromFile {
                         },
                         binary: items[i].binary,
                     });
-                    // ── Các operation khác: pass-through ───────
                 }
                 else {
-                    // Fallback: trả về text utf8 như Extract From Text File
                     results.push({
                         json: {
-                            text: buffer.toString('utf8'),
+                            text: binaryData.toString('utf8'),
                             fileName: binary.fileName || binaryField,
                             mimeType: binary.mimeType,
                         },
